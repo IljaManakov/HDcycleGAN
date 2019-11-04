@@ -7,8 +7,7 @@ from torch.utils.data import Dataset
 
 class OCTQualityDatasetHDF5(Dataset):
 
-    def __init__(self, hn, ln, storage_dir, vmin=0.0, vmax=1.0, whitening=False, preprocess=True, transforms=None,
-                 mode='classification'):
+    def __init__(self, hn, ln, storage_dir, vmin=0.0, vmax=1.0, whitening=False, preprocess=True, transforms=None):
 
         self._preprocess = preprocess
         self.storage_dir = storage_dir
@@ -23,7 +22,6 @@ class OCTQualityDatasetHDF5(Dataset):
         self.vmax = vmax
         self.whitening = whitening
         self.transforms = transforms
-        self.mode = mode
 
     def init(self):
         """
@@ -36,7 +34,7 @@ class OCTQualityDatasetHDF5(Dataset):
 
     def __len__(self):
 
-        return min(len(self.keys['lq']), len(self.keys['hq']))
+        return min(len(self.keys['ln']), len(self.keys['hn']))
 
     def __getitem__(self, item):
 
@@ -44,22 +42,21 @@ class OCTQualityDatasetHDF5(Dataset):
         if isinstance(self.hn, str) or isinstance(self.ln, str):
             self.init()
 
-        lq_key = self.keys['lq'][item]
-        lq = [self.preprocess(self.hn[lq_key].value),
-              self.hn[lq_key].attrs['frames'] * pt.ones(1)]
-        hq_key = self.keys['hq'][item]
-        hq = [self.preprocess(self.ln[hq_key].value),
-              self.ln[hq_key].attrs['frames'] * pt.ones(1)]
+        hn_key = self.keys['hn'][item]
+        hn = [self.preprocess(self.hn[hn_key][()]),
+              self.hn[hn_key].attrs['frames'] * pt.ones(1)]
+        ln_key = self.keys['ln'][item]
+        ln = [self.preprocess(self.ln[ln_key][()]),
+              self.ln[ln_key].attrs['frames'] * pt.ones(1)]
 
-        if self.mode == 'classification':
-            # convert number of frames to classes for classification
-            hq[1] = hq[1] / 12
-            hq[1][hq[1] > 1] = 2
+        # convert number of frames to classes for classification
+        ln[1] = ln[1] / 12
+        ln[1][ln[1] > 1] = 2
 
-            lq[1] = lq[1] / 12
-            lq[1][lq[1] > 1] = 2
+        hn[1] = hn[1] / 12
+        hn[1][hn[1] > 1] = 2
 
-        sample = ((lq[0], hq[0]), (lq[1].int(), hq[1].int()))
+        sample = ((hn[0], ln[0]), (hn[1].long(), ln[1].long()))
         return sample
 
     def preprocess(self, image):

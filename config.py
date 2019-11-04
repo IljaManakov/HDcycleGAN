@@ -1,15 +1,15 @@
 """module containing configurations for the model and training routine"""
 
 from torch.nn.functional import relu
-from torch.nn import L1Loss, CrossEntropyLoss
+from torch.nn import L1Loss, CrossEntropyLoss, BCEWithLogitsLoss
 from torch.optim import Adam
 from torch import float16
 
 from apex.fp16_utils import FP16_Optimizer
 
-from model import Discriminator, HDCycleGAN, Generator
+from model import Discriminator, HDCycleGAN, Generator, CycleGAN
 from dataset import OCTQualityDatasetHDF5
-from critertion import ClassificationLoss
+from critertion import ClassificationLoss, ClassificationLossHD
 
 
 dtype = float16
@@ -17,7 +17,7 @@ cuda = True
 seed = 0
 
 MODEL = HDCycleGAN
-LOSS = ClassificationLoss
+LOSS = ClassificationLossHD
 DATASET = OCTQualityDatasetHDF5
 OPTIMIZER = Adam
 APEX = FP16_Optimizer
@@ -28,7 +28,7 @@ generator = {
     'channel_factor': 16,
     'activation': relu,
     'kernel_size': (3, 3),
-    'n_residual': (6, 3),
+    'n_residual': (3, 3),
     'input_channels': 1,
     'skip_conn': 'concat'
 }
@@ -40,9 +40,8 @@ discriminator = {
     'channel_factor': 16,
     'max_channels': 1024,
     'input_channels': 1,
-    'n_residual': (1, 2),
-    'affine': False,
-    'mode': 'classification'
+    'n_residual': (0, 0),
+    'affine': False
 }
 
 model = {
@@ -54,26 +53,24 @@ model = {
 }
 
 dataset = {
-    'storage_dir': None,  # enter the directory of your hdf5 files here
-    'hn': None,  # enter the name of the HN hdf5 file here
-    'ln': None,  # enter the name of the LN hdf5 file here
+    'storage_dir': '/home/ilja/Datasets/',  # enter the directory of your hdf5 files here
+    'hn': 'low.hdf5',  # enter the name of the HN hdf5 file here
+    'ln': 'high.hdf5',  # enter the name of the LN hdf5 file here
     'vmin': 'mean-0.5',
     'vmax': 1.0,
-    'whitening': False,
-    'mode': 'classification'
+    'whitening': False
 }
 
 dataloader = {
-    'batch_size': 16,
+    'batch_size': 4,
     'shuffle': True,
-    'num_workers': 4,
+    'num_workers': 0,
 }
 
 loss = {
     'cycle_loss': L1Loss,
     'discriminator_loss': CrossEntropyLoss,
-    'cycle_factor': 10,
-    'mode': 'classification'
+    'cycle_factor': 10
 }
 
 optimizer = {
@@ -87,7 +84,7 @@ apex = {
 }
 
 trainer = {
-    'loss_decay': 0.99,
+    'loss_decay': 0.8,
     'split_sample': lambda x: (x[0], x)
 }
 

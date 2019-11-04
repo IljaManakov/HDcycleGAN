@@ -85,8 +85,8 @@ class Generator(pt.nn.Module):
 
 class Discriminator(pt.nn.Module):
 
-    def __init__(self, channel_factor=2, n_layers=7, activation=relu, kernel_size=(4, 4),
-                 n_residual=(0, 0), max_channels=1024, input_channels=1, affine=False, mode='regression', **kwargs):
+    def __init__(self, n_out, channel_factor=2, n_layers=7, activation=relu, kernel_size=(4, 4),
+                 n_residual=(0, 0), max_channels=1024, input_channels=1, affine=False, **kwargs):
 
         super(Discriminator, self).__init__()
         self.layers = []
@@ -109,24 +109,11 @@ class Discriminator(pt.nn.Module):
         self.layers.append(parts.GlobalAveragePooling2d())
         self.add_module('average-pooling', self.layers[-1])
 
-        if mode == 'regression':
+        self.layers.append(parts.Flatten())
+        self.add_module('flatten', self.layers[-1])
 
-            self.layers.append(pt.nn.Conv2d(out_channels, 1, 1))
-            self.add_module('depth-wise-conv', self.layers[-1])
-
-            self.layers.append(parts.Flatten())
-            self.add_module('flatten', self.layers[-1])
-
-        elif mode == 'classification':
-
-            self.layers.append(parts.Flatten())
-            self.add_module('flatten', self.layers[-1])
-
-            self.layers.append(pt.nn.Linear(current_channels, 3))
-            self.add_module('linear', self.layers[-1])
-
-        else:
-            raise ValueError('mode should be either "regression" or "classification"')
+        self.layers.append(pt.nn.Linear(current_channels, n_out))
+        self.add_module('linear', self.layers[-1])
 
     def forward(self, x):
 
@@ -167,13 +154,78 @@ class ImagePool(pt.nn.Module):
         return (pt.rand(1)*size).long()
 
 
+class CycleGAN(pt.nn.Module):
+
+    def __init__(self, generator, discriminator, input_size, pool_size=64, pool_write_probability=1):
+
+        super(CycleGAN, self).__init__()
+
+        self.discriminator = {'hn': discriminator[0](n_out=1, **discriminator[1]),
+                              'ln': discriminator[0](n_out=1, **discriminator[1])}
+        self.generator = {'hn': generator[0](**generator[1]),
+                          'ln': generator[0](**generator[1])}
+
+        self.add_module('discriminator_ln', self.discriminator['ln'])
+        self.add_module('discriminator_hn', self.discriminator['hn'])
+        self.add_module('generator_ln', self.generator['ln'])
+        self.add_module('generator_hn', self.generator['hn'])
+
+        self.pool_size = pool_size
+        self.pool_write_probability = pool_write_probability
+        self.pool = {'ln': ImagePool(self.pool_size, input_size, write_probability=self.pool_write_probability),
+                     'hn': ImagePool(self.pool_size, input_size, write_probability=self.pool_write_probability)}
+        self.add_module('pool_ln', self.pool['ln'])
+        self.add_module('pool_hn', self.pool['hn'])
+
+    def generate(self, x, quality):
+        return self.generator[quality](x)
+
+    def discriminate(self, x, quality):
+        return self.discriminator[quality](x)
+
+    def cycle(self, x, start_quality):
+        other = 'hn' if start_quality == 'ln' else 'ln'
+        return self.generate(self.generate(x, other), start_quality)
+
+    def discriminate_from_pool(self, quality, batch_size):
+        return self.discriminate(self.pool[quality].sample(batch_size), quality)
+
+    def _forward(self, x, target_quality):
+
+        start_quality = 'hn' if target_quality == 'ln' else 'ln'
+        generated = self.generate(x, target_quality)
+        self.pool[target_quality].write(generated)
+
+        real = self.discriminate(x, start_quality)
+        fake = self.discriminate(generated, target_quality)
+        pool_fake = self.discriminate_from_pool(target_quality, len(generated))
+
+        # CAUTION: real score is for a sample from the other domain
+        scores = namedtuple('scores', ('real', 'fake', 'pool_fake'))
+        prediction = namedtuple(target_quality, ('generated', 'scores'))
+
+        return prediction(generated, scores(real, fake, pool_fake))
+
+    def forward(self, x):
+
+        hn, ln = x
+
+        generated_ln, prediction_ln = self._forward(hn, 'ln')
+        generated_hn, prediction_hn = self._forward(ln, 'hn')
+        cycled = self.generate(generated_ln, 'hn'), self.generate(generated_hn, 'ln')
+
+        result = namedtuple('Result', ('cycled', 'hn_scores', 'ln_scores'))
+
+        return result(cycled, prediction_hn, prediction_ln)
+
+
 class HDCycleGAN(pt.nn.Module):
 
     def __init__(self, generator, discriminator, input_size, pool_size=64, pool_write_probability=1):
 
         super(HDCycleGAN, self).__init__()
 
-        self.discriminator = discriminator[0](**discriminator[1])
+        self.discriminator = discriminator[0](n_out=3, **discriminator[1])
         self.generator = {'hn': generator[0](**generator[1]),
                           'ln': generator[0](**generator[1])}
 
@@ -185,6 +237,8 @@ class HDCycleGAN(pt.nn.Module):
         self.pool_write_probability = pool_write_probability
         self.pool = {'ln': ImagePool(self.pool_size, input_size, write_probability=self.pool_write_probability),
                      'hn': ImagePool(self.pool_size, input_size, write_probability=self.pool_write_probability)}
+        self.add_module('pool_ln', self.pool['ln'])
+        self.add_module('pool_hn', self.pool['hn'])
 
     def generate(self, x, quality):
         return self.generator[quality](x)
