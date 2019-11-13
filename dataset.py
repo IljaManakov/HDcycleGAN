@@ -1,8 +1,27 @@
+"""
+Copyright 2019 Ilja Manakov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
 import os
+from os.path import join
 
 import h5py
 import torch as pt
 from torch.utils.data import Dataset
+from imageio import imread
 
 
 class OCTQualityDatasetHDF5(Dataset):
@@ -94,3 +113,52 @@ class OCTQualityDatasetHDF5(Dataset):
             std = image[image > 0].std()
             mean = image[image > 0].mean()
             return mean + factor * std
+
+
+class OCTQualityDataset(Dataset):
+
+    def __init__(self, parent_folder, fraction=0.8, transformation=lambda x: x):
+
+        self.transformation = transformation
+
+        # get lists of filenames
+        self.hn_files = self.gather_filenames(join(parent_folder, 'high-noise'))
+        self.ln_files = self.gather_filenames(join(parent_folder, 'low-noise'))
+
+        # keep fraction
+        last_index = int(len(self.hn_files) * abs(fraction))
+        self.hn_files = self.hn_files[:last_index] if fraction > 0 else self.hn_files[-last_index:]
+        last_index = int(len(self.ln_files) * abs(fraction))
+        self.ln_files = self.ln_files[:last_index] if fraction > 0 else self.ln_files[-last_index:]
+
+    @staticmethod
+    def gather_filenames(folder):
+
+        # walk through directories and collect filenames with path (in numerical order to preserve pairing)
+        filenames = []
+        for root, dirs, files in os.walk(folder):
+            dirs.sort(key=int)
+            if not files: continue
+            files.sort(key=lambda x: int(x.split('.')[0]))
+            filenames += [f'{root}/{f}' for f in files]
+        return filenames
+
+    @staticmethod
+    def prepare_image(filename):
+
+        # load and convert to normalized float32 tensor
+        image = pt.from_numpy(imread(filename))[None, ...].float()
+        image = image / image.max()
+        return image
+
+    def __len__(self):
+        return min(len(self.hn_files), len(self.ln_files))
+
+    def __getitem__(self, item):
+
+        hn = self.transformation(self.prepare_image(self.hn_files[item]))
+        ln = self.transformation(self.prepare_image(self.ln_files[item]))
+        images = (hn, ln)
+        labels = (1, 2)
+
+        return images, labels

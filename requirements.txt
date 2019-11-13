@@ -1,0 +1,6 @@
+numpy
+autoencoder
+h5py
+imageio
+torch
+gdown

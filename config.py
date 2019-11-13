@@ -5,10 +5,8 @@ from torch.nn import L1Loss, CrossEntropyLoss, BCEWithLogitsLoss
 from torch.optim import Adam
 from torch import float16
 
-from apex.fp16_utils import FP16_Optimizer
-
 from model import Discriminator, HDCycleGAN, Generator, CycleGAN
-from dataset import OCTQualityDatasetHDF5
+from dataset import OCTQualityDataset
 from critertion import ClassificationLoss, ClassificationLossHD
 
 
@@ -18,10 +16,20 @@ seed = 0
 
 MODEL = HDCycleGAN
 LOSS = ClassificationLossHD
-DATASET = OCTQualityDatasetHDF5
+DATASET = OCTQualityDataset
 OPTIMIZER = Adam
-APEX = FP16_Optimizer
 LOGDIR = f'./trained/{seed}'
+
+try:
+    from apex.fp16_utils import FP16_Optimizer
+    APEX = FP16_Optimizer
+    apex = {
+        'dynamic_loss_scale': True,
+        'dynamic_loss_args': {'init_scale': 2 ** 10},
+        'verbose': False
+    }
+except ImportError:
+    pass
 
 generator = {
     'scale_factor': 3,
@@ -53,12 +61,8 @@ model = {
 }
 
 dataset = {
-    'storage_dir': '/home/ilja/Datasets/',  # enter the directory of your hdf5 files here
-    'hn': 'low.hdf5',  # enter the name of the HN hdf5 file here
-    'ln': 'high.hdf5',  # enter the name of the LN hdf5 file here
-    'vmin': 'mean-0.5',
-    'vmax': 1.0,
-    'whitening': False
+    'parent_folder': '/home/ilja/Datasets/oct_quality',  # replace with the path to the parent folder on your system
+    'fraction': 0.1
 }
 
 dataloader = {
@@ -75,12 +79,6 @@ loss = {
 
 optimizer = {
     'lr': 0.0005
-}
-
-apex = {
-    'dynamic_loss_scale': True,
-    'dynamic_loss_args': {'init_scale': 2**16},
-    'verbose': False
 }
 
 trainer = {
