@@ -36,7 +36,7 @@ generator = {
     'channel_factor': 16,
     'activation': relu,
     'kernel_size': (3, 3),
-    'n_residual': (3, 3),
+    'n_residual': (6, 3),
     'input_channels': 1,
     'skip_conn': 'concat'
 }
@@ -48,7 +48,7 @@ discriminator = {
     'channel_factor': 16,
     'max_channels': 1024,
     'input_channels': 1,
-    'n_residual': (0, 0),
+    'n_residual': (1, 2),
     'affine': False
 }
 
