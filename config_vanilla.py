@@ -1,6 +1,6 @@
 """module containing configurations for the model and training routine"""
 
-from torch.nn.functional import relu, selu
+from torch.nn.functional import relu
 from torch.nn import L1Loss, CrossEntropyLoss, BCEWithLogitsLoss, MSELoss
 from torch.optim import Adam
 from torch import float16
@@ -16,11 +16,11 @@ dtype = float16
 cuda = True
 seed = 1
 
-MODEL = HDCycleGAN
-LOSS = ClassificationLossHD
+MODEL = CycleGAN
+LOSS = ClassificationLoss
 DATASET = OCTQualityDataset
 OPTIMIZER = Adam
-LOGDIR = f'/media/d/trained-models/cycoct/{seed}'
+LOGDIR = f'/media/d/trained-models/cycoct_vanilla/{seed}'
 
 try:
     from apex.fp16_utils import FP16_Optimizer
@@ -58,7 +58,7 @@ model = {
     'discriminator': (Discriminator, discriminator),
     'generator': (Generator, generator),
     'input_size': (1, 256, 256),
-    'pool_size': 64,
+    'pool_size': 32,
     'pool_write_probability': 1
 }
 
@@ -77,8 +77,7 @@ dataloader = {
 loss = {
     'cycle_loss': L1Loss,
     'discriminator_loss': MSELoss,
-    'cycle_factor': 10,
-
+    'cycle_factor': 10
 }
 
 optimizer = {
