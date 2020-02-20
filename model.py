@@ -68,7 +68,7 @@ class Generator(pt.nn.Module):
         # final convolution
         in_channels = channel_factor * 2 if skip_conn == 'concat' else channel_factor
         self.final_conv = parts.GeneralConvolution(in_channels, input_channels, kernel_size, (1, 1), pt.nn.ZeroPad2d,
-                                                   norm_func, activation, pt.nn.Conv2d, True)
+                                                   None, activation, pt.nn.Conv2d, True)
 
     def forward(self, x):
 
@@ -138,6 +138,8 @@ class Discriminator(pt.nn.Module):
         out = x
         for layer in self.layers:
             out = layer(out)
+
+        out = pt.sigmoid(out) if out.shape[-1] == 1 else pt.softmax(out, -1)
 
         return out
 

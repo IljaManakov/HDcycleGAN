@@ -143,11 +143,12 @@ class OCTQualityDataset(Dataset):
             filenames += [f'{root}/{f}' for f in files]
         return filenames
 
-    @staticmethod
-    def prepare_image(filename):
+    def prepare_image(self, filename):
 
         # load and convert to normalized float32 tensor
-        image = pt.from_numpy(imread(filename))[None, ...].float()
+        image = imread(filename)
+        image = self.transformation(image)
+        image = pt.from_numpy(image)[None, ...].float()
         image = image / image.max()
         return image
 
@@ -156,8 +157,8 @@ class OCTQualityDataset(Dataset):
 
     def __getitem__(self, item):
 
-        hn = self.transformation(self.prepare_image(self.hn_files[item]))
-        ln = self.transformation(self.prepare_image(self.ln_files[item]))
+        hn = self.prepare_image(self.hn_files[item])
+        ln = self.prepare_image(self.ln_files[item])
         images = (hn, ln)
         labels = (1, 2)
 
