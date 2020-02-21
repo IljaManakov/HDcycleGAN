@@ -2,12 +2,15 @@ import importlib
 import argparse
 import os
 from os.path import join, isdir
+from itertools import chain
 
 import torch as pt
 import torch.nn as nn
 from torch.nn import init
 from torch.utils.data import DataLoader
 import numpy as np
+
+from optimizer import OptimizerCollection
 
 
 def load_config(file):
@@ -125,14 +128,22 @@ model = config.MODEL(**config.model).cuda().to(dtype)
 model.apply(weight_init)
 dataset = config.DATASET(**config.dataset)
 criterion = config.LOSS(**config.loss)
-optimizer = config.OPTIMIZER(model.parameters(), **config.optimizer)
-dataloader = DataLoader(dataset, **config.dataloader)
 
-# convert optimizer and unify backward call
-if dtype == pt.float16:
-    optimizer = config.APEX(optimizer, **config.apex)
-if not hasattr(optimizer, 'backward'):
-    setattr(optimizer, 'backward', backward)
+gen_optimizer = config.OPTIMIZER(chain(model.generator['hn'].parameters(),
+                                       model.generator['ln'].parameters())
+                                 , **config.optimizer)
+disc_optimizer = config.OPTIMIZER(model.discriminator.parameters(), **config.optimizer)
+optimizers = []
+for optimizer in (disc_optimizer, gen_optimizer):
+
+    # convert optimizer and unify backward call
+    if dtype == pt.float16:
+        optimizer = config.APEX(optimizer, **config.apex)
+    if not hasattr(optimizer, 'backward'):
+        setattr(optimizer, 'backward', backward)
+    optimizers.append(optimizer)
+optimizer = OptimizerCollection(*optimizers)
+dataloader = DataLoader(dataset, **config.dataloader)
 
 # init log directory
 if not isdir(args.logdir):
@@ -144,30 +155,28 @@ try:
     for epoch in range(args.n_epochs):
         for step, (images, labels) in enumerate(dataloader):
 
-                # convert data to match network
-                images = [i.cuda().to(dtype) for i in images]
-                labels = [l.cuda().long() for l in labels]
+            # convert data to match network
+            images = [i.cuda().to(dtype) for i in images]
+            labels = [l.cuda().long() for l in labels]
 
-                # forward pass
-                result = model(images)
-                loss = criterion(result, ([i.float() for i in images], labels))
+            # forward pass
+            result = model(images)
+            loss = criterion(result, ([i.float() for i in images], labels))
 
-                # backward pass
-                optimizer.zero_grad()
-                optimizer.backward(loss)
-                optimizer.step()
+            # backward pass
+            optimizer.backward_pass(loss)
 
-                # reporting
-                progress = (epoch*steps_in_epoch+step) / (args.n_epochs*steps_in_epoch)
-                progress = round(100*progress, 2)
-                print(f'\repoch: {epoch} of {args.n_epochs}, step: {step}, progress: {progress}%,'
-                      f' loss: {round(loss.item(), 4)}', end='')
+            # reporting
+            progress = (epoch*steps_in_epoch+step) / (args.n_epochs*steps_in_epoch)
+            progress = round(100*progress, 2)
+            print(f'\repoch: {epoch} of {args.n_epochs}, step: {step}, progress: {progress}%,'
+                  f' loss: {[round(l.item(), 4) for l in loss]}', end='')
 
-                # write loss
-                with open(join(args.logdir, 'losses.csv'), 'a') as file:
-                    print(epoch, step, loss, sep=',', file=file)
+            # write loss
+            with open(join(args.logdir, 'losses.csv'), 'a') as file:
+                print(epoch, step, loss, sep=',', file=file)
 
 # always save model and optimizer before exiting
 finally:
     pt.save(model.state_dict(), join(args.logdir, f'{model.__class__.__name__}_epoch-{epoch}_step-{step}.pt'))
-    pt.save(optimizer.state_dict(), join(args.logdir, f'{optimizer.__class__.__name__}_epoch-{epoch}_step-{step}.pt'))
+    #pt.save(optimizer.state_dict(), join(args.logdir, f'{optimizer.__class__.__name__}_epoch-{epoch}_step-{step}.pt'))
