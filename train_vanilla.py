@@ -30,9 +30,9 @@ def sample_inference(trainer, part, sample, ind, *args, **kwargs):
 
 
 trainer.register_event_handler(events.EACH_STEP, sample_inference, name='gen_hn', interval=100, sample=sample,
-                               part=trainer.model.generator['hn'], ind=0)
+                               part=trainer.model.generator['hn'], ind=1)
 trainer.register_event_handler(events.EACH_STEP, sample_inference, name='gen_ln', interval=100, sample=sample,
-                               part=trainer.model.generator['ln'], ind=1)
+                               part=trainer.model.generator['ln'], ind=0)
 trainer.register_event_handler(events.EACH_EPOCH, EventSave(), monitor=False)
 trainer.monitor(name='criterion.ln_discriminator_loss')
 trainer.monitor(name='criterion.hn_discriminator_loss')
