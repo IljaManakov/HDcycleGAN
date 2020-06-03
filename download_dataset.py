@@ -4,7 +4,7 @@ import zipfile
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
-PARSER = argparse.ArgumentParser(description="V-Net medical")
+PARSER = argparse.ArgumentParser()
 
 PARSER.add_argument('--data_dir',
                     type=str,
