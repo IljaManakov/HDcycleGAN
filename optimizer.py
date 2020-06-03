@@ -11,7 +11,7 @@ class OptimizerCollection(object):
                 setattr(optimizer, 'backward', backward)
         self.optimizers = optimizers
 
-    def backward_pass(self, losses):
+    def backward(self, losses):
         for loss, optimizer in zip(losses, self.optimizers):
             optimizer.zero_grad()
             optimizer.backward(loss)

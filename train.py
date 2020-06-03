@@ -22,7 +22,7 @@ for optimizer in (disc_optimizer, gen_optimizer):
         optimizer = config.APEX(optimizer, **config.apex)
     optimizers.append(optimizer)
 trainer.optimizer = OptimizerCollection(*optimizers)
-trainer.backward_pass = trainer.optimizer.backward_pass
+trainer.backward_pass = trainer.optimizer.backward
 
 sample = next(iter(trainer.dataloader))[:4]
 

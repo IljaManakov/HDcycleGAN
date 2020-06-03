@@ -2,12 +2,15 @@ import importlib
 import argparse
 import os
 from os.path import join, isdir
+from itertools import chain
 
 import torch as pt
 import torch.nn as nn
 from torch.nn import init
 from torch.utils.data import DataLoader
 import numpy as np
+
+from optimizer import OptimizerCollection
 
 
 def load_config(file):
@@ -125,7 +128,15 @@ model = config.MODEL(**config.model).cuda().to(dtype)
 model.apply(weight_init)
 dataset = config.DATASET(**config.dataset)
 criterion = config.LOSS(**config.loss)
-optimizer = config.OPTIMIZER(model.parameters(), **config.optimizer)
+gen_optimizer = config.OPTIMIZER(chain(model.generator['hn'].parameters(),
+                                       model.generator['ln'].parameters()) , **config.optimizer)
+disc_optimizer = config.OPTIMIZER(model.discriminator.parameters(), **config.optimizer)
+optimizers = []
+for optimizer in (disc_optimizer, gen_optimizer):
+    if hasattr(config, 'APEX'):
+        optimizer = config.APEX(optimizer, **config.apex)
+    optimizers.append(optimizer)
+optimizer = OptimizerCollection(*optimizers)
 dataloader = DataLoader(dataset, **config.dataloader)
 
 # convert optimizer and unify backward call
