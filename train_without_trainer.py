@@ -181,4 +181,5 @@ try:
 # always save model and optimizer before exiting
 finally:
     pt.save(model.state_dict(), join(args.logdir, f'{model.__class__.__name__}_epoch-{epoch}_step-{step}.pt'))
-    pt.save(optimizer.state_dict(), join(args.logdir, f'{optimizer.__class__.__name__}_epoch-{epoch}_step-{step}.pt'))
+    for name, opt in zip(['gen', 'disc'], optimizer.optimizers):
+        pt.save(opt.state_dict(), join(args.logdir, f'{optimizer.__class__.__name__}_{name}_epoch-{epoch}_step-{step}.pt'))
